@@ -1,0 +1,50 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  analyze-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Static analysis
+        run: flutter analyze
+      - name: Unit / widget / golden / leak tests
+        run: flutter test
+
+  # Gate 1 (Article 6) — supply-chain vulnerability scan.
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Scans pubspec.lock (the full transitive tree) against the OSV database.
+      # There is no `dart pub audit` — OSV-Scanner is the tool.
+      - uses: google/osv-scanner-action@v2
+        with:
+          scan-args: |-
+            --lockfile=./pubspec.lock
+
+  # Gate 2 (Articles 4 & 6) — performance regression, ideally on real hardware.
+  # Runs the integration_test perf harness and fails if the raster p90 regresses.
+  # (Shown here for reference; wire to a device farm / self-hosted runner.)
+  performance:
+    if: false # enable once a real-device runner is available
+    runs-on: [self-hosted, real-device]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: >-
+          flutter drive
+          --driver=test_driver/perf_driver.dart
+          --target=integration_test/perf_test.dart
+          --profile
+      - run: ./tool/check_perf_budget.sh
