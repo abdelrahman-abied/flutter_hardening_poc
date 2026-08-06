@@ -58,6 +58,46 @@ flutter test                    # prove the claims headlessly
 flutter test --update-goldens   # (re)generate golden baselines
 ```
 
+---
+
+## Audit *your* app — the companion skill
+
+This repo **demonstrates** the techniques on one app. [**flutter-security-audit**](https://github.com/abdelrahman-abied/flutter-security-audit) **applies** them to any Flutter codebase: an [Agent Skill](https://agentskills.io) distilled from the same article series, which walks the 8 defense layers and writes a severity-ranked report where every finding carries a concrete fix and an attack-based way to verify it.
+
+It works with **any agent that reads the open `SKILL.md` standard** — Claude Code, Cursor, Google Antigravity, Codex CLI, Gemini CLI — and degrades gracefully to a plain bash scanner everywhere else.
+
+```bash
+# install once, globally (Claude Code — swap the directory for other agents)
+git clone https://github.com/abdelrahman-abied/flutter-security-audit \
+  ~/.claude/skills/flutter-security-audit
+
+# then just ask your agent: "security-review this Flutter app"
+```
+
+No agent at all? `scan.sh` is dependency-free bash — 36 checks, each tagged **OWASP MASVS + CWE**, exiting non-zero on a confirmed Critical/High so it drops straight into CI:
+
+```bash
+./scan.sh /path/to/app          # human-readable, severity-ranked
+./scan.sh /path/to/app --json   # machine-readable findings
+```
+
+Each layer it audits has a counterpart you can read here:
+
+| Skill layer | Where it lives in this PoC |
+|---|---|
+| **L1** reverse-engineering resistance | `anti_tamper.cpp` (XOR-obfuscated signatures) — note the release `--obfuscate`/`--split-debug-info` flags are *not* wired here, exactly the kind of gap the skill flags |
+| **L2** runtime self-protection (RASP) | RASP verdict screen + `lib/services/native_security_bridge.dart` |
+| **L3** screen & data-leak protection | `FLAG_SECURE` in `MainActivity.kt`; `lib/widgets/secure_app_wrapper.dart` (lifecycle overlay) |
+| **L4** network / transport | *not covered here* — pinning needs a server (see limitations); the skill checks it |
+| **L5** key & data custody | `lib/services/secure_envelope.dart` (X25519 + AES-256-GCM), biometric screen |
+| **L6** server-side trust | `lib/services/trust_decision.dart` — the client signals, the server decides |
+| **L7** supply chain & pipeline | `.github/workflows/ci.yml` OSV-Scanner gate + `.github/dependabot.yml` |
+| **L8** platform, IPC & injection | `webview_screen.dart`, `sql_injection_demo.dart`, `link_guard.dart`, `log_redactor.dart`, `jwt_inspect.dart` |
+
+Same framing as this PoC: **client-side controls raise cost and produce signal; the enforced decision lives on your server and in CI.** Neither the demos nor the report should ever imply an app is unbreakable.
+
+---
+
 ## Honest limitations (in the spirit of the series)
 
 - **RASP plugin checks** (root/jailbreak, emulator) are stubbed as "unavailable" — wiring `flutter_jailbreak_detection` + `safe_device` needs a real device.
